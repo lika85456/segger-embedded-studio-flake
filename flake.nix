@@ -54,39 +54,26 @@
             cp $src ./installer
             chmod +x ./installer
 
-            # Create installation directory with full permissions
+            # Create installation directory
             mkdir -p ./segger-install
-            chmod 755 ./segger-install
 
             # Run the installer to copy files (avoids root requirement)
             echo "Running installer with steam-run..."
-            steam-run ./installer --accept-license --copy-files-to $PWD/segger-install --full-install --silent || {
-              echo "Installer failed, checking what was created:"
-              find ./segger-install -type f | head -20 || echo "No files found"
-              echo "Continuing with partial installation..."
-            }
-
-            echo "Installation completed. Checking results:"
-            find ./segger-install -type f | head -20 || echo "No files found"
-            ls -la ./segger-install/ || echo "Directory listing failed"
+            ${pkgs.steam-run}/bin/steam-run ./installer --accept-license --copy-files-to $PWD/segger-install --full-install --silent
 
             runHook postBuild
           '';
 
           installPhase = ''
-            runHook preInstall
-            mkdir -p $out
-            if [ -d ./segger-install ] && [ "$(ls -A ./segger-install)" ]; then
-              cp -r ./segger-install/* $out/
-            else
-              echo "No files to install - segger-install directory is empty"
-              # Create a minimal directory structure to prevent build failure
-              mkdir -p $out/bin
-              echo "#!/bin/sh" > $out/bin/emStudio
-              echo "echo 'Segger Embedded Studio installation failed'" >> $out/bin/emStudio
-              chmod +x $out/bin/emStudio
-            fi
-            runHook postInstall
+            mkdir -p $out/segger-install
+            cp -r ./segger-install/* $out/segger-install/
+
+            mkdir -p $out/bin
+            cat > $out/bin/ses <<EOF
+            #!${pkgs.bash}/bin/bash
+            exec ${pkgs.steam-run}/bin/steam-run "$out/segger-install/bin/emStudio" "$@"
+            EOF
+            chmod +x $out/bin/ses
           '';
 
           meta = with pkgs.lib; {
@@ -95,14 +82,17 @@
             license = licenses.unfree;
           };
         };
-
       in {
         packages.default = seggerEmbeddedStudio;
-        packages.segger-embedded-studio = seggerEmbeddedStudio;
+        packages.ses = seggerEmbeddedStudio;
 
-        apps.default = {
-          type = "app";
-          program = "${seggerEmbeddedStudio}/bin/emStudio";
+        apps.ses = flake-utils.lib.mkApp {
+          drv = seggerEmbeddedStudio;
+          exePath = "/bin/ses";
+        };
+        apps.default = flake-utils.lib.mkApp {
+          drv = seggerEmbeddedStudio;
+          exePath = "/bin/ses";
         };
 
         devShells.default = pkgs.mkShell {
