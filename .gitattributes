@@ -1,0 +1,1 @@
+install_segger_embedded_studio filter=lfs diff=lfs merge=lfs -text
