@@ -91,6 +91,11 @@
         packages.default = seggerEmbeddedStudio;
         packages.segger-embedded-studio = seggerEmbeddedStudio;
 
+        apps.default = {
+          type = "app";
+          program = "${seggerEmbeddedStudio}/bin/emStudio";
+        };
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [ steam-run xorg.xhost fakeroot ];
         };
