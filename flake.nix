@@ -14,11 +14,21 @@
           config.allowUnfree = true;
         };
 
+        # Use the LFS binary from GitHub when running from a fixed rev (nix run github:...)
+        # Fall back to local file when developing locally.
+        installer = if (self ? rev && self.rev != null) then
+          pkgs.fetchurl {
+            url = "https://raw.githubusercontent.com/lika85456/segger-embedded-studio-flake/${self.rev}/install_segger_embedded_studio";
+            sha256 = "sha256-AY/gV+9xdrGkx2GNKFYGYvn0/qR2AYkLW9u+WmOLl0Y=";
+          }
+        else
+          ./install_segger_embedded_studio;
+
         seggerEmbeddedStudio = pkgs.stdenv.mkDerivation rec {
           pname = "segger-embedded-studio";
           version = "8.16b";
 
-          src = ./install_segger_embedded_studio;
+          src = installer;
 
           nativeBuildInputs = with pkgs; [ autoPatchelfHook steam-run ];
 
