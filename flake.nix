@@ -14,21 +14,20 @@
           config.allowUnfree = true;
         };
 
-        # Use the LFS binary from GitHub when running from a fixed rev (nix run github:...)
-        # Fall back to local file when developing locally.
-        installer = if (self ? rev && self.rev != null) then
-          pkgs.fetchurl {
-            url = "https://raw.githubusercontent.com/lika85456/segger-embedded-studio-flake/${self.rev}/install_segger_embedded_studio";
-            sha256 = "sha256-AY/gV+9xdrGkx2GNKFYGYvn0/qR2AYkLW9u+WmOLl0Y=";
-          }
-        else
-          ./install_segger_embedded_studio;
+        # Upstream downloads (see: https://www.segger.com/downloads/embedded-studio/)
+        # Upstream direct tarball; site may require a Referer/User-Agent
+        # See overview page: https://www.segger.com/downloads/embedded-studio/
+        seggerTarball = pkgs.fetchurl {
+          url =
+            "https://www.segger.com/fd/embedded-studio/Setup_EmbeddedStudio_v816b_linux_x64.tar.gz";
+          sha256 = "sha256-+uIVnfRQg4WqDLNSdKwDUPQMKJLm2uf8wEJMac5Y430=";
+        };
 
         seggerEmbeddedStudio = pkgs.stdenv.mkDerivation rec {
           pname = "segger-embedded-studio";
           version = "8.16b";
 
-          src = installer;
+          src = seggerTarball;
 
           nativeBuildInputs = with pkgs; [ autoPatchelfHook steam-run ];
 
@@ -53,23 +52,27 @@
             stdenv.cc.cc.lib
           ];
 
-          dontUnpack = true;
+          dontUnpack = false;
+
+          unpackCmd = "tar -xzf $src";
 
           buildPhase = ''
             runHook preBuild
 
-            echo "Running SEGGER Embedded Studio installer"
+            echo "Unpacked SEGGER tarball; running installer"
 
-            # Copy installer and make it executable
-            cp $src ./installer
-            chmod +x ./installer
+            # Find the installer inside the extracted contents
+            installerPath=$(find . -maxdepth 2 -type f -name 'install_segger_embedded_studio' | head -n1)
+            if [ -z "$installerPath" ]; then
+              echo "Installer not found in tarball contents" >&2
+              exit 1
+            fi
+            chmod +x "$installerPath"
 
-            # Create installation directory
-            mkdir -p ./segger-install
+            mkdir -p segger-install
 
-            # Run the installer to copy files (avoids root requirement)
             echo "Running installer with steam-run..."
-            ${pkgs.steam-run}/bin/steam-run ./installer --accept-license --copy-files-to $PWD/segger-install --full-install --silent
+            ${pkgs.steam-run}/bin/steam-run "$installerPath" --accept-license --copy-files-to "$PWD/segger-install" --full-install --silent
 
             runHook postBuild
           '';
@@ -81,7 +84,7 @@
             mkdir -p $out/bin
             cat > $out/bin/ses <<EOF
             #!${pkgs.bash}/bin/bash
-            exec ${pkgs.steam-run}/bin/steam-run "$out/segger-install/bin/emStudio" "$@"
+            exec ${pkgs.steam-run}/bin/steam-run "$out/segger-install/bin/emStudio" "\$@"
             EOF
             chmod +x $out/bin/ses
           '';
